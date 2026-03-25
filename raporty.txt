@@ -1,0 +1,18 @@
+---------------------------------------Raport 1-------------------------------------------------
+DONE: 
+setup wirtualnego środowiska python do pracy nad projektem i nie "zaśmiecania" komputera niepotrzebnymi bibliotekami, narzędziami
+
+zainicjalizowanie repozytorium GIT
+
+Skrypt do scrapingu na stronie HELIONU, nazwa i cena, implementacja zabezpieczeń przed zmianami
+nazwy zmiennej na stronie
+
+Skrypt to scrapingu na stronie X-KOMU, nazwa i cena, implementacja zabezpieczen przed zmianami nazwy zmiennej na stronie,
+
+PROBLEM: Strona ma zabezpieczenia przed podstawowymi metodami pozyskiwania danych, nie daje się połączyć (error 403). Zaawansowana blokada Web Application Firewall odrzuca  standardowe żądania HTTP.
+
+ROZWIĄZANIE: znalezienie i implementacja nowej biblioteki "curl_cffi", do maskowania połączenia i "podrabiania" prawdziwej przeglądarki, spoofing sygnatury TLS (TLS Fingerprinting)
+
+Baza danych z wszystkimi wymaganymi miejscami na dane
+
+Main do zautomatyzowania pobierania nazw i cen produktów i zapisywania ich do bazy wraz z datą pobrania cen

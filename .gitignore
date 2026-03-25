@@ -1,0 +1,15 @@
+# Środowisko wirtualne
+venv/
+env/
+
+# Pamięć podręczna Pythona
+__pycache__/
+*.pyc
+
+# Bazy danych (lokalne)
+*.db
+*.sqlite3
+
+# Środowisko IDE
+.vscode/
+.idea/
