@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Panel Główny - Price Tracker</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; padding: 20px; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); max-width: 900px; margin: 0 auto; }
+        h1 { color: #333; }
+        .logout-btn { float: right; background: #dc3545; color: white; border: none; padding: 10px 15px; border-radius: 5px; text-decoration: none; }
+        .logout-btn:hover { background: #c82333; }
+        
+        /* Styl formularza */
+        .add-form { margin: 20px 0; display: flex; gap: 10px; }
+        .add-form input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
+        .add-form button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        .add-form button:hover { background: #0056b3; }
+        
+        /* Styl tabeli */
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f8f9fa; }
+        .price { font-weight: bold; color: #28a745; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <a href="/login" class="logout-btn">Wyloguj się</a>
+    <h1>Witaj w Panelu Głównym! 🚀</h1>
+    
+    <hr>
+    
+    <h3>Dodaj nowy produkt do śledzenia:</h3>
+    <!-- Formularz wysyła link z przeglądarki prosto do endpointu -->
+    <form class="add-form" action="/dodaj-produkt-html" method="post">
+        <input type="url" name="url" placeholder="Wklej link z Helion lub X-Kom..." required>
+        <button type="submit">Dodaj do bazy</button>
+    </form>
+
+    <h3>Twoje obserwowane produkty:</h3>
+    
+    <table>
+        <tr>
+            <th>Sklep</th>
+            <th>Tytuł</th>
+            <th>Cena</th>
+            <th>Data zapisu / aktualizacji</th>
+        </tr>
+        
+        <!-- Pętla Jinja2, która drukuje nowy wiersz dla każdego produktu z bazy -->
+        {% for produkt in produkty %}
+        <tr>
+            <td>{{ produkt.sklep }}</td>
+            <td><a href="{{ produkt.url }}" target="_blank">{{ produkt.tytul }}</a></td>
+            <td class="price">{{ produkt.cena }}</td>
+            <td>{{ produkt.data_zapisu }}</td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="4" style="text-align: center; color: #777;">Baza jest pusta. Dodaj swój pierwszy link!</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+
+</body>
+</html>

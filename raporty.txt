@@ -16,3 +16,24 @@ ROZWIĄZANIE: znalezienie i implementacja nowej biblioteki "curl_cffi", do masko
 Baza danych z wszystkimi wymaganymi miejscami na dane
 
 Main do zautomatyzowania pobierania nazw i cen produktów i zapisywania ich do bazy wraz z datą pobrania cen
+
+---------------------------------------Raport 2-----------------------------------------------
+DONE: 
+Przejście na architekturę webową – instalacja nowoczesnego frameworka FastAPI oraz serwera Uvicorn. Zastąpienie skryptów konsolowych prawdziwym interfejsem API.
+
+Wdrożenie ORM (Object-Relational Mapping) przy pomocy biblioteki SQLAlchemy. Stworzenie pliku z modelami bazy danych (tabele Użytkownicy i HistoriaCen zdefiniowane jako klasy w Pythonie), co całkowicie wyeliminowało potrzebę pisania "surowego" kodu SQL.
+
+Wdrożenie bezpiecznej autoryzacji – użycie biblioteki passlib oraz algorytmu bcrypt do szyfrowania (hashowania) haseł przed zapisem do bazy (zapobieganie przechowywaniu haseł w otwartym tekście).
+
+Implementacja endpointów autoryzacyjnych w FastAPI (testowanych przez interaktywnego Swagger UI):
+- POST /rejestracja (z zabezpieczeniem przed dublowaniem istniejących użytkowników)
+- POST /logowanie (z weryfikacją zgodności szyfru hasła i zwracaniem błędu 401 Unauthorized przy błędnych danych)
+
+PROBLEM: Podczas próby zapisu użytkownika do bazy serwer wyrzucał błąd "500 Internal Server Error". Analiza konsoli (Traceback) wykazała błąd modułu ("AttributeError: module 'bcrypt' has no attribute '__about__'") oraz błąd limitu 72 bajtów. Powodem był konflikt zależności (Dependency Hell) – najnowsza aktualizacja biblioteki "bcrypt" (wersja 4.0+) usunęła funkcje, na których opierał się "passlib".
+
+ROZWIĄZANIE: Ręczny "downgrade" (obniżenie wersji) biblioteki wykonującej operacje kryptograficzne do starszej, stabilnej i w pełni kompatybilnej wersji (pip install bcrypt==3.2.2) oraz zaktualizowanie pliku requirements.txt.
+
+DONE:
+Integracja scrapera z serwerem API. Implementacja endpointu POST /dodaj-produkt, który automatycznie filtruje podany link (rozpoznaje domenę Helion/X-Kom), uruchamia w tle odpowiedni silnik z Raportu 1 i zapisuje wynik (wraz z wygenerowaną datą) do bazy danych za pomocą ORM.
+
+Stworzenie endpointu podglądowego GET /produkty, pozwalającego na odczytanie całej bazy i sprawdzenie poprawności zapisu w formacie JSON z poziomu przeglądarki.
