@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Rejestracja - Price Tracker</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .login-container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 300px; text-align: center; }
+        input { width: 90%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; }
+        button { width: 100%; padding: 10px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin-top: 10px; }
+        button:hover { background: #0056b3; }
+        .link { display: block; margin-top: 15px; color: #555; text-decoration: none; font-size: 14px; }
+        .link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+<div class="login-container">
+    <h2>Załóż nowe konto</h2>
+    
+    {% if blad %}
+        <p style="color: red; font-weight: bold;">{{ blad }}</p>
+    {% endif %}
+    {% if sukces %}
+        <p style="color: green; font-weight: bold;">{{ sukces }}</p>
+    {% endif %}
+
+    <form action="/zarejestruj-html" method="post">
+        <input type="text" name="username" placeholder="Wymyśl nazwę użytkownika" required>
+        <input type="password" name="password" placeholder="Wymyśl hasło" required>
+        <button type="submit">Zarejestruj się</button>
+    </form>
+    
+    <a href="/login" class="link">Masz już konto? Zaloguj się.</a>
+</div>
+
+</body>
+</html>

@@ -237,5 +237,38 @@ def dodaj_produkt_z_formularza(url: str = Form(...), db: Session = Depends(get_d
         db.add(nowy_rekord)
         db.commit()
         
-    # Po pomyślnym dodaniu produktu wracamy do panelu głównego
+    # Po pomyślnym dodaniu produktu powrót do panelu głównego
     return RedirectResponse(url="/dashboard", status_code=303)
+
+@app.get("/rejestracja", response_class=HTMLResponse)
+def strona_rejestracji(request: Request):
+    return templates.TemplateResponse(request=request, name="rejestracja.html")
+
+@app.post("/zarejestruj-html")
+def zarejestruj_z_formularza(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    # Sprawdzamy czy nazwa jest wolna
+    istniejacy = db.query(models.Uzytkownik).filter(models.Uzytkownik.username == username).first()
+    if istniejacy:
+        return templates.TemplateResponse(
+            request=request, 
+            name="rejestracja.html", 
+            context={"blad": "Ta nazwa użytkownika jest już zajęta!"}
+        )
+        
+    # Szyfrujemy i zapisujemy nowego usera
+    zhashowane_haslo = get_password_hash(password)
+    nowy_uzytkownik = models.Uzytkownik(username=username, hashed_password=zhashowane_haslo)
+    db.add(nowy_uzytkownik)
+    db.commit()
+    
+    # Wyświetlamy komunikat o sukcesie na tej samej stronie
+    return templates.TemplateResponse(
+        request=request, 
+        name="rejestracja.html", 
+        context={"sukces": "Konto utworzone! Możesz się teraz zalogować."}
+    )
