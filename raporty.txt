@@ -37,3 +37,32 @@ DONE:
 Integracja scrapera z serwerem API. Implementacja endpointu POST /dodaj-produkt, który automatycznie filtruje podany link (rozpoznaje domenę Helion/X-Kom), uruchamia w tle odpowiedni silnik z Raportu 1 i zapisuje wynik (wraz z wygenerowaną datą) do bazy danych za pomocą ORM.
 
 Stworzenie endpointu podglądowego GET /produkty, pozwalającego na odczytanie całej bazy i sprawdzenie poprawności zapisu w formacie JSON z poziomu przeglądarki.
+
+-------------------------------------Raport 3-------------------------------------------------
+DONE: 
+Wdrożenie automatyzacji i zadań w tle – instalacja i konfiguracja biblioteki APScheduler. Zbudowanie "robota" uruchamianego wraz ze startem serwera, który cyklicznie odpytuje bazę o unikalne linki, uruchamia odpowiednie scrapery i automatycznie zapisuje najnowsze ceny do bazy.
+
+Przejście na architekturę Full-Stack – instalacja silnika szablonów Jinja2 oraz biblioteki python-multipart do obsługi danych z formularzy webowych.
+
+Zbudowanie interfejsu graficznego użytkownika (Frontend) przy użyciu HTML/CSS. Stworzenie responsywnych widoków w folderze "templates": 
+- login.html (formularz logowania), 
+- rejestracja.html (tworzenie konta), 
+- dashboard.html (panel główny).
+
+Integracja Frontendu z Backendem. Przebudowa endpointów FastAPI tak, aby potrafiły odbierać dane typu "Form Data" z przeglądarki i zwracać wyrenderowane pliki HTML (TemplateResponse) oraz wykonywać przekierowania (RedirectResponse) zamiast czystego formatu JSON.
+
+Dynamiczne renderowanie danych z bazy SQLAlchemy bezpośrednio w tabeli HTML na panelu głównym (użycie pętli i instrukcji warunkowych języka Jinja2 wewnątrz kodu HTML).
+
+PROBLEM: Podczas pierwszej próby wyrenderowania strony HTML przez serwer, wystąpił błąd "500 Internal Server Error", a w konsoli pojawił się komunikat: "TypeError: unhashable type: 'dict'" wewnątrz modułów Starlette/Jinja2.
+
+ROZWIĄZANIE: Problem wynikał z niedawnej aktualizacji FastAPI. Funkcja TemplateResponse zmieniła domyślną kolejność przyjmowanych parametrów. Błąd rozwiązano poprzez jawne zdefiniowanie argumentów po ich nazwach (tzw. keyword arguments) w kodzie Pythona, np.: TemplateResponse(request=request, name="login.html", context={...}). To wyeliminowało niejednoznaczność dla interpretera.
+
+---------------------------------------Raport 4-----------------------------------------------
+DONE: 
+Podpięcie biblioteki Chart.js do Frontendu. Skonstruowanie algorytmu w backendzie (FastAPI), który transformuje surowe dane z bazy SQLAlchemy (ceny jako tekst, daty jako obiekty datetime) na wyczyszczone wartości zmiennoprzecinkowe (float) i formatuje je do struktury JSON. Przekazanie paczki danych przez silnik Jinja2 do skryptu JavaScript na stronie, co pozwoliło na wygenerowanie dynamicznych, interaktywnych wykresów liniowych dla każdego obserwowanego produktu.
+
+Implementacja logiki powiadomień. Wykorzystanie wbudowanych bibliotek Pythona (smtplib, email.mime) do nawiązania bezpiecznego połączenia TLS z serwerem SMTP (Google). Skonfigurowanie dedykowanego konta z wykorzystaniem "Hasła aplikacji". Wzbogacenie logiki robota (APScheduler) o mechanizm weryfikacji spadku cen (porównywanie nowej ceny z ostatnim rekordem przypisanym do danego użytkownika) i automatyczne wysyłanie sformatowanych wiadomości email przy wykryciu promocji.
+
+Rozwiązanie problemu braku izolacji danych. Modyfikacja modeli ORM (dodanie kluczy obcych i relacji) w celu przypisania produktów do konkretnych kont. Wdrożenie obsługi sesji za pomocą Ciasteczek (Cookies) w FastAPI, pozwalające na identyfikację zalogowanego użytkownika i filtrowanie wyświetlanych dla niego danych.
+
+Zabezpieczenie widoków poprzez obsługę błędów (Error Handling) i poprawę UX. Zastąpienie surowych błędów API (np. przy podaniu nieobsługiwanego linku) przekierowaniami z parametrami zapytania (?blad=...), które są w locie przechwytywane przez Jinja2 i wyświetlane w formie alertów HTML. Przekierowanie głównej ścieżki ("/") bezpośrednio do ekranu logowania, ukrywając surowe endpointy przed użytkownikiem końcowym.

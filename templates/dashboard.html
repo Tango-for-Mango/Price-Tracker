@@ -26,12 +26,17 @@
 <body>
 
 <div class="container">
-    <a href="/login" class="logout-btn">Wyloguj się</a>
-    <h1>Witaj w Panelu Głównym! 🚀</h1>
+    <a href="/wyloguj" class="logout-btn">Wyloguj się</a>
+    <h1>Witaj {{ username }}! 🚀</h1>
     
     <hr>
     
     <h3>Dodaj nowy produkt do śledzenia:</h3>
+    {% if blad %}
+        <div style="background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; border: 1px solid #f5c6cb; margin-bottom: 15px;">
+            <strong>Błąd:</strong> {{ blad }}
+        </div>
+    {% endif %}
     <!-- Formularz wysyła link z przeglądarki prosto do endpointu -->
     <form class="add-form" action="/dodaj-produkt-html" method="post">
         <input type="url" name="url" placeholder="Wklej link z Helion lub X-Kom..." required>
@@ -62,6 +67,66 @@
         </tr>
         {% endfor %}
     </table>
+    <hr style="margin: 40px 0;">
+    
+    <h3>Wykresy zmian cen:</h3>
+    <div id="wykresy-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script>
+        // Odbieramy dane JSON z FastAPI przy pomocy magii Jinja2
+        const daneWykresow = {{ dane_wykresow | safe }};
+        const container = document.getElementById("wykresy-container");
+
+        // Przechodzimy pętlą po każdym produkcie
+        for (const [tytul, dane] of Object.entries(daneWykresow)) {
+            
+            // 1. Budujemy estetyczne "pudełko" dla każdego wykresu
+            const wrapper = document.createElement("div");
+            wrapper.style.marginBottom = "30px";
+            wrapper.style.padding = "20px";
+            wrapper.style.background = "#fafafa";
+            wrapper.style.border = "1px solid #eee";
+            wrapper.style.borderRadius = "8px";
+            
+            const tytulWykresu = document.createElement("h4");
+            tytulWykresu.textContent = tytul;
+            wrapper.appendChild(tytulWykresu);
+
+            // 2. Tworzymy tzw. płótno (canvas), na którym rysuje Chart.js
+            const canvas = document.createElement("canvas");
+            wrapper.appendChild(canvas);
+            container.appendChild(wrapper);
+
+            // 3. Odpalamy rysowanie!
+            new Chart(canvas, {
+                type: 'line', // Typ wykresu: liniowy
+                data: {
+                    labels: dane.daty, // Daty na oś pozioma (X)
+                    datasets: [{
+                        label: 'Cena w PLN',
+                        data: dane.ceny, // Ceny na oś pionowa (Y)
+                        borderColor: '#28a745',
+                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        borderWidth: 2,
+                        pointBackgroundColor: '#1e7e34',
+                        fill: true,
+                        tension: 0.1 // Leciutkie zakrzywienie linii
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            // Wykres nie musi startować od 0, skupi się na różnicach w cenie
+                            beginAtZero: false 
+                        }
+                    }
+                }
+            });
+        }
+    </script>
 </div>
 
 </body>

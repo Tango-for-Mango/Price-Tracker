@@ -1,11 +1,15 @@
-from fastapi import FastAPI, Depends, HTTPException, Request, Form
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import json
+from fastapi import FastAPI, Depends, HTTPException, Request, Form, Response
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from apscheduler.schedulers.background import BackgroundScheduler
 
-# Importujemy nasze własne pliki
+# Importujemy własne pliki
 import models
 from models import SessionLocal, engine
 from security import get_password_hash, verify_password
@@ -13,8 +17,50 @@ from scraper import pobierz_dane_helion, pobierz_dane_xkom
 
 # Inicjalizujemy serwer FastAPI
 app = FastAPI(title="Price Tracker API")
-# Wskazujemy FastAPI, gdzie leżą nasze pliki HTML
+# Wskazujemy FastAPI, gdziesą pliki HTML
 templates = Jinja2Templates(directory="templates")
+
+# --- KONFIGURACJA EMAIL ---
+GMAIL_ADRES = "jankowalskipricetracker@gmail.com" # Wpisz adres tego nowego konta
+GMAIL_HASLO = "jdjwspkkqfoumhnr" # Bez spacji!
+
+def wyslij_powiadomienie_email(tytul_produktu, stara_cena, nowa_cena, link):
+    try:
+        # Konstruujemy wiadomość
+        msg = MIMEMultipart()
+        msg['From'] = GMAIL_ADRES
+        # W ramach testów wysyłamy maila... sami do siebie, żeby zobaczyć czy działa!
+        msg['To'] = GMAIL_ADRES 
+        msg['Subject'] = f"📉 Spadek ceny! {tytul_produktu}"
+
+        body = f"""Cześć!
+
+Cena obserwowanego przez Ciebie produktu wlasnie spadła!
+
+Produkt: {tytul_produktu}
+Stara cena: {stara_cena}
+Nowa cena: {nowa_cena}
+
+Kup teraz: {link}
+
+Pozdrawia,
+Twój zautomatyzowany Price Tracker 🤖
+"""
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+
+        # Łączymy się z serwerem Google
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls() # Szyfrowanie połączenia
+        server.login(GMAIL_ADRES, GMAIL_HASLO)
+        
+        # Wysyłamy i zamykamy!
+        text = msg.as_string()
+        server.sendmail(GMAIL_ADRES, GMAIL_ADRES, text)
+        server.quit()
+        print(f"📧 [EMAIL] Wysłano radosną nowinę o spadku ceny!")
+        
+    except Exception as e:
+        print(f"📧 [EMAIL ERROR] Nie udało się wysłać maila: {e}")
 
 # --- DEPENDENCY ---
 # Funkcja otwierająca i zamykająca połączenie z bazą dla każdego zapytania
@@ -28,11 +74,9 @@ def get_db():
 # --- ROBOT DO AKTUALIZACJI CEN W TLE ---
 def sprawdz_ceny_w_tle():
     print("🤖 [ROBOT] Rozpoczynam sprawdzanie cen w tle...")
-    
-    # Ponieważ nie jesteśmy w endpoincie, musimy sami otworzyć sesję z bazą
     db = models.SessionLocal()
     try:
-        # Wyciągamy z bazy tylko unikalne linki i ich sklepy, żeby nie sprawdzać 10 razy tego samego
+        # Wyciągamy unikalne linki, żeby nie męczyć stron (np. jak 5 osób śledzi to samo)
         unikalne_produkty = db.query(models.HistoriaCen.url, models.HistoriaCen.sklep).distinct().all()
         
         if not unikalne_produkty:
@@ -42,9 +86,7 @@ def sprawdz_ceny_w_tle():
         for produkt in unikalne_produkty:
             url = produkt.url
             sklep = produkt.sklep
-            print(f"🤖 [ROBOT] Sprawdzam: {url}")
             
-            # Odpalamy scrapery
             if sklep == "Helion":
                 wynik = pobierz_dane_helion(url)
             elif sklep == "X-Kom":
@@ -52,24 +94,45 @@ def sprawdz_ceny_w_tle():
             else:
                 continue
                 
-            # Jeśli scraper zadziałał, zapisujemy nowy punkt w historii!
             if "blad" not in wynik:
-                nowy_rekord = models.HistoriaCen(
-                    sklep=sklep,
-                    tytul=wynik['tytul'],
-                    url=url,
-                    cena=wynik['cena']
-                )
-                db.add(nowy_rekord)
+                # Szukamy, jacy użytkownicy śledzą ten konkretny link
+                zainteresowani = db.query(models.HistoriaCen.uzytkownik_id).filter(models.HistoriaCen.url == url).distinct().all()
                 
-        # Zapisujemy wszystko na sam koniec
+                for (user_id,) in zainteresowani:
+                    
+                    # MAGIA POWIADOMIEŃ: Wyciągamy ostatnią zapisaną cenę dla tego usera
+                    ostatni_rekord = db.query(models.HistoriaCen).filter(
+                        models.HistoriaCen.uzytkownik_id == user_id, 
+                        models.HistoriaCen.url == url
+                    ).order_by(models.HistoriaCen.data_zapisu.desc()).first()
+                    
+                    # Jeśli mamy z czym porównać (to nie jest pierwsze dodanie)
+                    if ostatni_rekord:
+                        # Tłumaczymy tekst (np. "59,40 zł") na liczby ułamkowe do matematyki
+                        stara_cena_float = float(ostatni_rekord.cena.replace(" zł", "").replace(",", ".").replace(" ", ""))
+                        nowa_cena_float = float(wynik['cena'].replace(" zł", "").replace(",", ".").replace(" ", ""))
+                        
+                        # Jeśli jest taniej - wysyłamy maila! (zmiana na == dla testu)!!!
+                        if nowa_cena_float < stara_cena_float:
+                            print(f"📉 [PROMOCJA] {wynik['tytul']} jest tańszy! Wysyłam maila...")
+                            wyslij_powiadomienie_email(wynik['tytul'], ostatni_rekord.cena, wynik['cena'], url)
+                    
+                    # Normalnie dodajemy nowy wpis do bazy (niezależnie czy spadło czy nie)
+                    nowy_rekord = models.HistoriaCen(
+                        sklep=sklep,
+                        tytul=wynik['tytul'],
+                        url=url,
+                        cena=wynik['cena'],
+                        uzytkownik_id=user_id
+                    )
+                    db.add(nowy_rekord)
+                    
         db.commit()
         print("🤖 [ROBOT] Wszystkie ceny zostały zaktualizowane!")
-        
     except Exception as e:
         print(f"🤖 [ROBOT] Wystąpił błąd: {e}")
     finally:
-        db.close() # Pamiętamy o sprzątaniu!
+        db.close()
 
 # --- SCHEMATY PYDANTIC ---
 # Klasa określająca,jakie dane wymagane od użytkownika
@@ -98,7 +161,8 @@ def start_scheduler():
 
 @app.get("/")
 def powitanie():
-    return {"wiadomosc": "Witaj w API Price Trackera! Serwer działa."}
+    # Ktokolwiek wejdzie na główny adres, od razu ląduje w formularzu logowania
+    return RedirectResponse(url="/login", status_code=303)
 
 @app.post("/rejestracja")
 def zarejestruj_uzytkownika(dane: UzytkownikRejestracja, db: Session = Depends(get_db)):
@@ -187,36 +251,78 @@ def zaloguj_z_formularza(
     password: str = Form(...),
     db: Session = Depends(get_db)
 ):
-    # Szukamy użytkownika
     uzytkownik = db.query(models.Uzytkownik).filter(models.Uzytkownik.username == username).first()
     
-    # Sprawdzamy hasło
     if not uzytkownik or not verify_password(password, uzytkownik.hashed_password):
-        # Odświeżamy stronę logowania, ale tym razem przekazujemy zmienną "blad"
         return templates.TemplateResponse(
             request=request, 
             name="login.html", 
             context={"blad": "Nieprawidłowy login lub hasło!"}
         )
         
-    # Jeśli wszystko się zgadza, przekierowujemy do panelu głównego (Dashboarda)
-    return RedirectResponse(url="/dashboard", status_code=303)
+    # SUKCES! Zamiast po prostu przekierować, tworzymy obiekt odpowiedzi
+    response = RedirectResponse(url="/dashboard", status_code=303)
+    # Naklejamy na niego ciasteczko (ważne przez jeden dzień), żeby serwer nas pamiętał
+    response.set_cookie(key="zalogowany_uzytkownik", value=uzytkownik.username, max_age=86400)
+    
+    return response
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def panel_glowny(request: Request, db: Session = Depends(get_db)):
-    # Wyciągamy z bazy całą historię cen, sort od najnowszych
-    produkty_z_bazy = db.query(models.HistoriaCen).order_by(models.HistoriaCen.data_zapisu.desc()).all()
+    aktywny_user = request.cookies.get("zalogowany_uzytkownik")
+    if not aktywny_user:
+        return RedirectResponse(url="/login", status_code=303)
+        
+    uzytkownik = db.query(models.Uzytkownik).filter(models.Uzytkownik.username == aktywny_user).first()
     
-    # Przekazujemy listę do naszego pliku HTML jako zmienną "produkty"
+    # Wyciągamy dane do tabeli HTML (od najnowszych)
+    produkty_z_bazy = db.query(models.HistoriaCen).filter(models.HistoriaCen.uzytkownik_id == uzytkownik.id).order_by(models.HistoriaCen.data_zapisu.desc()).all()
+    
+    # --- PRZYGOTOWANIE DANYCH DLA CHART.JS ---
+    # Do wykresu wyciągamy od najstarszych, żeby czas szedł od lewej do prawej
+    produkty_rosnaco = db.query(models.HistoriaCen).filter(models.HistoriaCen.uzytkownik_id == uzytkownik.id).order_by(models.HistoriaCen.data_zapisu.asc()).all()
+    
+    dane_wykresow = {}
+    for p in produkty_rosnaco:
+        if p.tytul not in dane_wykresow:
+            dane_wykresow[p.tytul] = {"daty": [], "ceny": []}
+            
+        # Zmieniamy tekst "59,40 zł" na ułamek 59.40
+        czysta_cena = p.cena.replace(" zł", "").replace(",", ".").replace(" ", "")
+        try:
+            cena_float = float(czysta_cena)
+        except ValueError:
+            continue # Pomijamy ewentualne błędy parsowania
+            
+        # Skracamy format daty, żeby ładnie wyglądał na wykresie
+        data_str = p.data_zapisu.strftime("%Y-%m-%d %H:%M")
+        
+        dane_wykresow[p.tytul]["daty"].append(data_str)
+        dane_wykresow[p.tytul]["ceny"].append(cena_float)
+        
+    # Pakujemy słownik w format JSON
+    dane_json = json.dumps(dane_wykresow)
+    
     return templates.TemplateResponse(
         request=request, 
         name="dashboard.html", 
-        context={"produkty": produkty_z_bazy}
+        context={
+            "produkty": produkty_z_bazy, 
+            "username": aktywny_user,
+            "dane_wykresow": dane_json # Wysyłamy nową paczkę na stronę!
+        }
     )
 
 @app.post("/dodaj-produkt-html")
-def dodaj_produkt_z_formularza(url: str = Form(...), db: Session = Depends(get_db)):
-    # Identyczna logika rozpoznawania sklepu jak wcześniej
+def dodaj_produkt_z_formularza(request: Request, url: str = Form(...), db: Session = Depends(get_db)):
+    # 1. Sprawdzamy kto dodaje link (wyciągamy z ciasteczka)
+    aktywny_user = request.cookies.get("zalogowany_uzytkownik")
+    if not aktywny_user:
+        return RedirectResponse(url="/login", status_code=303)
+        
+    uzytkownik = db.query(models.Uzytkownik).filter(models.Uzytkownik.username == aktywny_user).first()
+    
+    # 2. Rozpoznawanie sklepu i skrapowanie
     if "helion.pl" in url:
         sklep = "Helion"
         wynik = pobierz_dane_helion(url)
@@ -224,20 +330,24 @@ def dodaj_produkt_z_formularza(url: str = Form(...), db: Session = Depends(get_d
         sklep = "X-Kom"
         wynik = pobierz_dane_xkom(url)
     else:
-        # Jeśli zły link, wracamy do panelu (TO DO obsluga bledu)
-        return RedirectResponse(url="/dashboard", status_code=303)
+        return RedirectResponse(url="/dashboard?blad=Nieobsługiwany link! Obsługujemy tylko Helion i X-Kom.", status_code=303)
         
+    if "blad" in wynik:
+        # Jeśli scraper rzucił błędem (np. strona nie istnieje)
+        return RedirectResponse(url=f"/dashboard?blad=Błąd pobierania: {wynik['blad']}", status_code=303)
+
+    # 3. Zapisujemy dane i podpinamy je pod uzytkownik_id!
     if "blad" not in wynik:
         nowy_rekord = models.HistoriaCen(
             sklep=sklep,
             tytul=wynik['tytul'],
             url=url,
-            cena=wynik['cena']
+            cena=wynik['cena'],
+            uzytkownik_id=uzytkownik.id  # <--- MAGIA IZOLACJI DANYCH
         )
         db.add(nowy_rekord)
         db.commit()
         
-    # Po pomyślnym dodaniu produktu powrót do panelu głównego
     return RedirectResponse(url="/dashboard", status_code=303)
 
 @app.get("/rejestracja", response_class=HTMLResponse)
@@ -272,3 +382,9 @@ def zarejestruj_z_formularza(
         name="rejestracja.html", 
         context={"sukces": "Konto utworzone! Możesz się teraz zalogować."}
     )
+
+@app.get("/wyloguj")
+def wyloguj():
+    response = RedirectResponse(url="/login", status_code=303)
+    response.delete_cookie("zalogowany_uzytkownik") # Usuwamy ciasteczko!
+    return response
